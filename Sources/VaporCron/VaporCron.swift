@@ -5,13 +5,15 @@ import NIOCronScheduler
 public struct VaporCron {
     let application: Application
     
-    init (application: Application) {
+    init(application: Application) {
         self.application = application
     }
     
     @discardableResult
     public func schedule<T: VaporCronSchedulable>(_ job: T.Type) throws -> NIOCronJob {
-        return try schedule(job.expression) { job.task(on: self.application) }
+        return try schedule(job.expression) { (application, eventLoop) in
+            job.task(on: self.application, eventLoop: eventLoop)
+        }
     }
     
     @discardableResult
@@ -25,8 +27,9 @@ public struct VaporCron {
     }
     
     @discardableResult
-    public func schedule(_ expression: String, _ task: @escaping (Application) throws -> Void) throws -> NIOCronJob {
-        return try NIOCronScheduler.schedule(expression, on: application.eventLoopGroup.next(), { try task(self.application) })
+    public func schedule(_ expression: String, _ task: @escaping (Application, EventLoop) throws -> Void) throws -> NIOCronJob {
+        let eventLoop = application.eventLoopGroup.next()
+        return try NIOCronScheduler.schedule(expression, on: eventLoop, { try task(self.application, eventLoop) })
     }
 }
 
@@ -46,5 +49,5 @@ public protocol VaporCronSchedulable: NIOCronExpressable {
     associatedtype T
     
     @discardableResult
-    static func task(on application: Application) -> EventLoopFuture<T>
+    static func task(on application: Application, eventLoop: EventLoop) -> EventLoopFuture<T>
 }
